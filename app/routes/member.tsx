@@ -1,5 +1,4 @@
 "use client";
-import { useState, useEffect } from "react";
 import {
   Button,
   TextInput,
@@ -9,9 +8,9 @@ import {
   Paper,
   Table,
   Title,
-  Notification,
   Divider,
-  Flex,
+  Box,
+  Text,
 } from "@mantine/core";
 import { createItem, readItems } from "@directus/sdk";
 import directus from "libs/directus_sdk";
@@ -20,38 +19,55 @@ import {
   LoaderFunctionArgs,
   redirect,
 } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import {
+  useLoaderData,
+  useFetcher,
+} from "@remix-run/react";
 import { userIdCookie } from "~/cookies";
+import { ValidatedForm, validationError } from "remix-validated-form";
+import { createFeedbackValidator } from "libs/validator";
+
+const validator = createFeedbackValidator();
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const cookieHeader = request.headers.get("Cookie");
-  const userId = await userIdCookie.parse(cookieHeader);
+  try {
+    const cookieHeader = request.headers.get("Cookie");
+    const userId = await userIdCookie.parse(cookieHeader);
 
-  const feedbacks = await directus.request(
-    readItems("feedback", {
-      filter: {
-        created_by: {
-          _eq: userId,
+    const feedbacks = await directus.request(
+      readItems("feedback", {
+        filter: {
+          created_by: { _eq: userId },
         },
-      },
-    })
-  );
-  return { feedbacks };
+      })
+    );
+
+    return { feedbacks };
+  } catch (error) {
+    console.error("Error loading feedbacks:", error);
+    throw new Response("Failed to load feedbacks", { status: 500 });
+  }
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const cookieHeader = request.headers.get("Cookie");
+  const userId = await userIdCookie.parse(cookieHeader);
   const formData = await request.formData();
 
-  const title = formData.get("title") as string;
-  const description = formData.get("description") as string;
-  const category = formData.get("category") as string;
+  const validation = await validator.validate(formData);
+  if (validation.error) {
+    return validationError(validation.error);
+  }
+
+  const { title, description, category } = validation.data;
 
   await directus.request(
     createItem("feedback", {
       title,
       description,
       category,
-      status: "Pending",
+      created_by: userId,
+      created_at: new Date().toISOString(),
     })
   );
 
@@ -64,15 +80,22 @@ export default function MemberDashboard() {
 
   return (
     <Paper radius="md" m={50} p={20} withBorder bg="white">
-     
-
       <Title order={1} c="red">
         Submit Feedback
       </Title>
 
-      <fetcher.Form method="post">
-        <input type="hidden" name="intent" value="create" />
-        <TextInput label="Title" name="title" required mb="sm" />
+      <ValidatedForm
+        method="post"
+        validator={validator}
+        fetcher={fetcher}
+      >
+        <TextInput
+          label="Title"
+          name="title"
+          required
+          mb="sm"
+        />
+
         <Textarea
           label="Description"
           name="description"
@@ -81,6 +104,7 @@ export default function MemberDashboard() {
           required
           mb="sm"
         />
+
         <Select
           label="Category"
           name="category"
@@ -88,94 +112,51 @@ export default function MemberDashboard() {
           required
           mb="sm"
         />
+
         <Group justify="flex-end">
           <Button
             type="submit"
-            loading={
-              fetcher.state === "submitting" &&
-              fetcher.formData?.get("intent") === "create"
-            }
+            loading={fetcher.state === "submitting"}
           >
             Submit
           </Button>
         </Group>
-      </fetcher.Form>
+      </ValidatedForm>
 
       <Divider color="dark.4" my="md" />
 
       <Title order={2}>All Feedbacks</Title>
 
       {feedbacks.length > 0 ? (
-        <Table highlightOnHover striped withTableBorder verticalSpacing="sm">
+        <Table
+          highlightOnHover
+          striped
+          withTableBorder
+          verticalSpacing="sm"
+        >
           <thead>
             <tr>
               <th>Title</th>
               <th>Category</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th>Created at</th>
             </tr>
           </thead>
           <tbody>
-            {feedbacks.map((fb: any) => {
-              const statusFetcher = useFetcher();
-              return (
-                <tr key={fb.id}>
-                  <td>{fb.title}</td>
-                  <td>{fb.category}</td>
-                  <td>
-                    <statusFetcher.Form method="post">
-                      <input
-                        type="hidden"
-                        name="intent"
-                        value="update-status"
-                      />
-                      <input type="hidden" name="id" value={fb.id} />
-                      <Select
-                        name="status"
-                        defaultValue={fb.status}
-                        data={["Pending", "Reviewed"]}
-                        disabled={statusFetcher.state === "submitting"}
-                        onChange={(value) => {
-                          if (value) {
-                            statusFetcher.submit(
-                              {
-                                intent: "update-status",
-                                id: fb.id,
-                                status: value,
-                              },
-                              { method: "post" }
-                            );
-                          }
-                        }}
-                      />
-                    </statusFetcher.Form>
-                  </td>
-                  <td>
-                    <fetcher.Form method="post">
-                      <input type="hidden" name="intent" value="delete" />
-                      <input type="hidden" name="id" value={fb.id} />
-                      <Button
-                        type="submit"
-                        variant="light"
-                        color="red"
-                        loading={
-                          fetcher.state === "submitting" &&
-                          fetcher.formData?.get("id") === fb.id
-                        }
-                      >
-                        Delete
-                      </Button>
-                    </fetcher.Form>
-                  </td>
-                </tr>
-              );
-            })}
+            {feedbacks.map((fb: any) => (
+              <tr key={fb.id} style={{ textAlign: "center" }}>
+                <td>{fb.title}</td>
+                <td>{fb.category}</td>
+                <td>{fb.status}</td>
+                <td>{new Date(fb.created_at).toLocaleString()}</td>
+              </tr>
+            ))}
           </tbody>
         </Table>
       ) : (
-        <div style={{ textAlign: "center", color: "dimmed" }}>
-          No feedbacks found.
-        </div>
+        <Box ta="center">
+          <Text>No feedbacks found.</Text>
+        </Box>
       )}
     </Paper>
   );

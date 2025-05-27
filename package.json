@@ -19,9 +19,20 @@
     "@remix-run/node": "^2.16.7",
     "@remix-run/react": "^2.16.7",
     "@remix-run/serve": "^2.16.7",
+    "@remix-validated-form/with-yup": "^3.0.1",
+    "@rvf/react-router": "^7.1.5",
+    "@rvf/remix": "^6.3.0",
+    "@rvf/yup": "^7.0.2",
     "isbot": "^4.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.5.2",
+    "react-router": "^6.20.1",
+    "react-router-dom": "^6.20.1",
+    "remix": "^2.16.7",
+    "remix-validated-form": "^5.1.5",
+    "yup": "^1.6.1",
+    "zod": "^3.25.23"
   },
   "devDependencies": {
     "@remix-run/dev": "^2.16.7",
